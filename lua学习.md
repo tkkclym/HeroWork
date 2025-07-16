@@ -35,6 +35,22 @@ nil number(浮点和整数都有) bool  string  table userdata thread
 
 `userdata` 可以保存任意C数据（对应一块原始内存）
 
+#### userdata:
+
+​	1. 定义：本质是一个储存着C++对象的指针（通常是void*) 通过这个指针能够在运行时访问和操作对应的C++对象。
+
+2. Metatable 绑定：每一个userdata都关联一个元表，元表中定义了：
+   1. 方法映射：将C++类中的UFunction暴露为Lua可调用的参数。
+   2. 属性访问：通过`__index`和`__newindex`元方法实现对C++`Uproperty`的读写
+   3. 生命周期：通过`__gc`元方法在Lua对象被垃圾回收的时候释放资源
+
+疑问： 所以C++反射到lua也是通过宏定义进行处理的？是通过UHT嘛？还是Lua自己的反射处理系统？
+
+- lua也是借助UE的UHT生成的反射代码（.genrated.h）然后借助反射信息，将C++类型注册到Lua环境中。
+- 具体的流程就是，Lua环境初始化的时候unlua会遍历所有标记为可反射的C++类，并为每个类生成对应的Lua元表（应该是存储到对应的同名的`.lua`文件中？） 当调用C++方法的时候unlua会通过反射系统动态调用对应的函数。
+
+
+
 `thread` 用于实现协同程序的独立执行线程
 
 `table` 数组，可以保存除了nil之外的任意类型的数组
@@ -123,7 +139,7 @@ LogUnLua: Repeat LymTable:    5
 myTable ={'heroes',4,3,4,5}
 a,b,v=myTable[1],myTable[4]
 print(a)
-print(b) 
+print(b)
 print(v)
 
 输出：
@@ -896,4 +912,11 @@ PushEvent就是相当于触发了监听器呗，相当于一个开关，掉用�
 
 
 
+
+### Lua Debug之打印函数堆栈：
+
+```
+    -- 在需要打印堆栈的地方添加以下代码
+   print(debug.traceback("堆栈跟踪信息:"))
+```
 
