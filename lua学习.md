@@ -920,3 +920,148 @@ PushEvent就是相当于触发了监听器呗，相当于一个开关，掉用�
    print(debug.traceback("堆栈跟踪信息:"))
 ```
 
+
+
+
+
+对背包部分的UI学习：
+
+confirm对应的就是选中背包中物品之后的操作。背包物品栏BagTileView
+
+lua文件中：
+
+​	Construct进行构造添加按钮绑定事件。声明并定义owner.获取palyer的背包组件
+
+在C++文件中找到了委托和调用委托广播的地方，但是却没有看到委托的回调函数在那里注册的
+
+
+
+- 现在是找到了点击confirm按钮，点击之后打印相关log,然后向服务器发送消息，这个func函数是向服务器发送消息的函数？这是哪里定义的全局函数？
+
+  以下是深入传递服务器函数逻辑之后，层层返回到背包相关业务逻辑的思路：
+
+不懂func是什么，最后还是找到了，这是_sendUEMsg函数的变量。去看看其他地方调用`_sendUEMsg`的都是传入的什么函数
+
+```lua
+function _sendUEMsg(controller, func, msgid, msg, OwnerActor, ObjOrObjArray)
+    
+     -- .........
+   	 				UnLua.Log(logdesc,msgid,MsgName,protoinfo:Num(),serpent.line(msg,g_serpentoptions),objname)
+
+    func(controller, msgid, protoinfo, OwnerActor, ObjOrObjArray)
+end
+
+
+
+UEMsgHandle.lua文件中：
+
+
+function SendUEMsgToServer(msgid, msg, OwnerActor, ObjOrObjArray)
+--  ..省略对其他参数的判定逻辑，只看后面调用_sendUEMsg时候的参数信息
+    if g_IsTArray(ObjOrObjArray) then
+        _sendUEMsg(controller, controller.SendMsgToServer_MoreTarget, msgid, msg, OwnerActor, ObjOrObjArray)
+    else
+        _sendUEMsg(controller, controller.SendMsgToServer, msgid, msg, OwnerActor, ObjOrObjArray)
+    end
+end
+```
+
+接着往前回到了WBP_DebugItem.lua文件中
+
+```lua
+function M:SendDebugCmd(cmd)
+    local pawn = self:GetOwningPlayerPawn()
+    local controller = pawn:GetController()
+    if controller:IsOfflineDebugMode() then
+        SendUEMsgToServer(g_Msg.MsgID_UEServerDebugCmd, cmd, nil)      
+    else
+        local serverNet = UE.UServerNetworkSubsystem.GetServerNetwork(controller)
+        if serverNet then
+            serverNet:SendMsg(g_Msg.MsgID_ClientToGameDebugCmdReq,cmd)
+        end
+    end
+end
+```
+
+
+
+当某个函数不是局部函数也不是全局函数的时候，看看其是不是作为参数传进来的函数。。。。无语了
+
+
+
+emmm也就是说，点击confirm的时候向服务器传输信息是通过调用controller发送的，但是你并不能找到controller在哪，因为这是加入游戏的时候服务器分配的controller。 所以具体关于controller的函数应该在服务器分配的controller中寻找
+
+去c++的controller中寻找 BP_ProjectAirPlayerController
+
+发现lua中调用的playercontroller中的函数SendMsgToServer_MoreTarget，但是该函数又使用了unlua中的g_MsgEvent.HandleUEMsg函数..?
+
+```lua
+  _sendUEMsg(controller, controller.SendMsgToServer_MoreTarget, msgid, msg, OwnerActor, ObjOrObjArray)
+```
+
+总之最后调用了`g_MsgEvent:AddEventListener(Ref,OwnerActor,Id,Func)`上的回调函数Func
+
+unlua中的自定义系统：
+
+MsgEvent.lua文件，实际上实现的是自定义的事件系统，其中主要包含事件ID、事件监听、事件移除和事件触发。
+
+就是AddEventListener:添加事件监听器，支持关联特定的OwnerActor
+
+RemoveEventListener:移除事件监听器，同样支持关联特定的OwnerActor
+
+PushEvent:触发事件，会调用所有注册该事件的回调函数。
+
+
+
+
+
+## 联网Server：
+
+------联网流程基本就是在controller进入游戏的时候通过UServerNetworkSubsystem这个自定义的子系统进行网络连接
+
+```C++
+void AProjectAirPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+	
+	PlayerCameraManager->SetViewTarget(GetCharacter());
+
+	if ( GetNetMode() == NM_Client && !IsOfflineDebugMode())
+	{
+         //先获取网络子系统实例，接着验证其有效性。
+
+		auto pNet= UServerNetworkSubsystem::GetServerNetwork(this);
+		if (IsValid(pNet))
+		{
+            //构建ClientGameRoleInfoReq消息，此消息用于请求游戏角色信息。
+			protocol::ClientGameRoleInfoReq msg;
+            //最后通过网络子系统把消息发送到服务器。
+			pNet->SendMsg(protocol::MsgID_ClientGameRoleInfoReq,msg);	
+
+		}
+	}
+}
+```
+
+## C++调用Lua函数
+
+被封装在了ProjectAirUtilities文件中
+
+```c++
+void UProjectAirUtilities::CallLua_PushEvent(AActor* OwnerActor, int32 ID)
+{
+    lua_State* L = UnLua::GetState();
+    UnLua::CallTableFunc(L, "g_MsgEvent", "PushEvent",ID);
+}这种就是封装的函数吧，用于访问lua中的函数，但是什么情况下需要访问lua中的函数呢？调用的lua函数有没有返回值呢？
+```
+
+- 调用 Lua 函数一般是为了实现热更新、加快迭代速度或者分离业务逻辑。
+- 在你的代码示例中，`PushEvent(ID)` 的核心作用是：
+  1. **传递事件 ID**：从 C++ 层传递事件标识（如 `ID=1001` 代表 "玩家登录" 事件）。
+  2. **触发 Lua 监听器**：Lua 层预先注册了对该事件 ID 的回调函数，当 C++ 调用 `PushEvent` 时，Lua 层执行对应的回调逻辑。
+
+## 心跳
+
+在player controller中，如果是客户端的controller的话是要发送心跳的
+
+心跳的作用是什么？确保客户端一直在线?
