@@ -1263,6 +1263,83 @@ void AProjectAirPlayerController::BeginPlay()
 
 
 
+
+
+## UEMsgHandle.lua
+
+此文件中的函数就是应对UE的客户端和服务器之间的Msg通信的
+
+```lua
+function g_MsgEvent.HandleUEMsg(controller, msgid, protoinfo, OwnerActor, ObjOrObjArray)
+```
+
+C++实现客户端服务器通信也是通过调用此函数进行处理。
+
+![image-20250721161942433](C:\Users\yinming.li\AppData\Roaming\Typora\typora-user-images\image-20250721161942433.png)
+
+此函数是g_MsgEvent中的函数，但是并未和MsgEvent写到一个lua文件，无所谓了，反正MsgEvent已经注册为全局对象了。
+
+此函数作用：
+
+- 首先通过UProjectAirUtilities工具类中的函数进行判断是客户端函数服务器发的消息，然后将发起者名称存入String:: desc
+
+- 再进行判断ObjOrObjArray中的对象蜀将，然后遍历展示。
+
+- 再通过 local MsgName = g_Msg.Parse[msgid]处理msgid输出消息的编号
+
+- protoinfo 对其进行处理，解码，然后打印出来这里相关的信息，我也不知道这个有啥用，。
+
+- 然后将解码的信息存入到参数msg中
+
+- 根据 `OwnerActor` 是否为 `nil` 分情况处理：
+
+  - 若 `OwnerActor` 为 `nil`，遍历 `g_MsgEvent.UEMsgHandle[msgid]` 中的所有回调函数并执行。
+
+  - 若 `OwnerActor` 不为 `nil`，查找 `g_MsgEvent.UEMsgHandle[msgid][OwnerActor]` 对应的回调函数并执行。 若未找到对应的回调函数，则记录警告日志表示消息未处理。
+
+    
+
+这个函数为辅助函数哦
+
+在此文件中还有创建委托，移除委托，出发委托的事件函数定义。用于处理UE的message
+
+- AddUEMsgListener
+- RemoveUEMsgListener
+- SendUEMsgToServer 
+  - 该函数判断是不是服务端，是不是能够获取world是不是能够获取controller,然后再对ObjOrObjArray调用_sendUEMsg`函数
+- SendUEMsgToClient
+  - 一样的，只是这个是发到客户端的， 同样最后调用了`_sendUEMsg`
+- g_MsgEvent.HandleUEMsg 这个函数适用于处理收到的消息
+- _sendUEMsg ：该函数作用是为了发送函数  【所以跟上面的HandleUEMsg对比一个接收一个发送。】
+
+#### 理清思路
+
+捋捋思路，lua中有sendMsg的函数，当需要向server或者client发送信息的时候都会调用_sendUEMsg 。而其中回调函数是第二个参数，该参数是C++中发送信息的函数，C++中相关的函数实现是调用Lua中的HandleUEMsg也就是说，整个流程中其实我们只是用了Controller，主要逻辑还是在Lua中，只是客户端服务器交互的时候需要经过Controller。
+
+#### func的作用：
+
+func在此函数中作为回调函数，在函数最后所有参数处理完之后  func(controller, msgid, protoinfo, OwnerActor, ObjOrObjArray) 也就意味着，此时程序跳转到C++中，进入函数体内部之后又跳入lua的 g_MsgEvent.HandleUEMsg(controller, msgid, protoinfo, OwnerActor, ObjOrObjArray)中
+
+总结：
+
+controller在这里的作用是什么呢？为什么还要经过controller的C++中的函数进行处理lua脚本。而所有send信息具体处理细节都在Lua中？
+
+-- 别忘了在网路连接的时候接入网络的是服务器分配的controller。所以其作为重要桥梁
+
+--还有就是作为网络模式判断与消息路由通过调用 `UE.UProjectAirUtilities.IsServerNetMode(g_GameInstance)` 来判断网络模式，进而决定是向服务器还是客户端发送消息。
+
+
+
+
+
+## DBMsghandle.lua
+
+和数据库进行事件交互委托，其实和UEMsgHandle.lua及其相似
+
+
+
+总结： `g_MsgEvent.HandleUEMsg` 函数的核心流程是接收 UE 消息，进行合法性验证、解码操作，记录日志，最后根据消息 ID 和 `OwnerActor` 执行相应的回调函数Func来处理消息
+
 ### 逻辑运算符 or : 
 
 or是短路运算符，在使用时候与其他语言有写不同：
@@ -1283,3 +1360,34 @@ end
 为什么要这样写？
 
 - 这种写法主要是为了**避免后续代码因 `Config` 为 `nil` 而报错**。
+
+
+
+## Add全局函数，Add是什么？
+
+Add全局函数，Add是什么？是一个多播委托，其绑定一个回调函数，为什么有AddEventListener还要用Add绑定按钮的Click呢？两者区别是什么	
+
+AddEventListener 是作为两端之间的事件使用的，那种按钮的纯就是为了响应事件，绑定函数使用的。如果涉及到客户端服务端交互就有可能需要，但是一般还是sendMsg之类的函数，上面的UEMsgHandle中相关的函数。
+
+
+
+
+
+## 为什么进入场景失败？
+
+目前对UI方面的处理： 账号登陆的时候是由saveGame相关的函数处理。	按钮：Button_Entry 。
+
+进入游戏按钮：Button_JoinGame
+进入游戏按钮绑定的click函数：
+
+```lua
+function M:OnClickJoinGame()
+    self.Panel_Role:SetVisibility(UE.ESlateVisibility.Hidden)
+    local accountData = require("PlayerData.AccountData")
+    accountData:JoinArea(self.SelectedAreaID)
+end
+```
+
+是直接调： accountData:JoinArea(areaID)
+
+但是
