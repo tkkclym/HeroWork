@@ -80,6 +80,29 @@ LogUnLua: LymTable:   3    --第3个元素
 LogUnLua: LymTable:   5  	--第5个元素
 ```
 
+
+
+#### for中下划线的用法是什么意思呢？
+
+在 Lua 中，`for` 循环里的下划线 `_` 是一种常见的**变量名约定**，用来表示 “这个变量我不打算使用”。它本质上还是一个普通变量，但开发者用 `_` 明确告诉自己和其他阅读代码的人：“这个变量只是**占位**用的，我不需要它的值”。
+
+在搭配pairs或着ipairs的时候，`_`通常用来忽略键（key）只获取值
+
+```lua
+local fruits = { "apple", "banana", "cherry" }
+for _,value in ipairs()
+print("value") -- 输出apple,banana,cherry
+end
+
+```
+
+### 为什么用 `_` 而不是其他变量名？
+
+- **可读性**：看到 `_` 时，其他开发者立刻明白 “这个变量在这里不重要”。
+- **避免警告**：在某些 Lua 代码检查工具中，未使用的变量会触发警告，用 `_` 可以避免这种情况。
+
+
+
 - while
 
   ```lua
@@ -338,6 +361,10 @@ end
 Lua 的`pairs`遍历顺序是由表的内部结构决定的：先遍历连续整数索引的数组部分（按索引升序），再遍历哈希部分（顺序不确定）。这种设计是为了平衡性能和实现复杂度。
 
 数组部分的连续内存访问比哈希表更快，优先遍历数组部分可以提高常见场景（如纯数组）的遍历效率。
+
+
+
+
 
 
 
@@ -692,7 +719,7 @@ Unlua调用蓝图函数：就是同名函数直接自动绑定了，如果调用
 
 unlua调用C++函数：
 
-​	暂时不知道
+​	就是使用UE.xxx.xxxx调用对应类中的方法或者属性
 
 
 
@@ -924,7 +951,7 @@ PushEvent就是相当于触发了监听器呗，相当于一个开关，掉用�
 
 
 
-对背包部分的UI学习：
+## 对背包部分的UI学习：
 
 confirm对应的就是选中背包中物品之后的操作。背包物品栏BagTileView
 
@@ -993,7 +1020,17 @@ emmm也就是说，点击confirm的时候向服务器传输信息是通过调用
 
 去c++的controller中寻找 BP_ProjectAirPlayerController
 
-发现lua中调用的playercontroller中的函数SendMsgToServer_MoreTarget，但是该函数又使用了unlua中的g_MsgEvent.HandleUEMsg函数..?
+发现lua中调用的playercontroller中的函数SendMsgToServer_MoreTarget，但是该函数又使用了unlua中的g_MsgEvent.HandleUEMsg函数..
+
+```C++
+void AProjectAirPlayerController::SendMsgToServer_MoreTarget_Implementation(int msgid, const TArray<uint8>& protoinfo, UObject* OwnerActor, const TArray<UObject*>& ObjectArray)
+{
+    SpeedTestObjectParamTag("UEMsg", "msgid", msgid);
+    UnLua::CallTableFunc(UnLua::GetState(), "g_MsgEvent", "HandleUEMsg", this, msgid, protoinfo, OwnerActor, ObjectArray);
+}
+```
+
+
 
 ```lua
   _sendUEMsg(controller, controller.SendMsgToServer_MoreTarget, msgid, msg, OwnerActor, ObjOrObjArray)
@@ -1001,7 +1038,7 @@ emmm也就是说，点击confirm的时候向服务器传输信息是通过调用
 
 总之最后调用了`g_MsgEvent:AddEventListener(Ref,OwnerActor,Id,Func)`上的回调函数Func
 
-unlua中的自定义系统：
+### unlua中的自定义系统：
 
 MsgEvent.lua文件，实际上实现的是自定义的事件系统，其中主要包含事件ID、事件监听、事件移除和事件触发。
 
@@ -1014,6 +1051,8 @@ PushEvent:触发事件，会调用所有注册该事件的回调函数。
 
 
 
+
+# TIme718 
 
 ## 联网Server：
 
@@ -1045,7 +1084,7 @@ void AProjectAirPlayerController::BeginPlay()
 
 ## C++调用Lua函数
 
-被封装在了ProjectAirUtilities文件中
+这里是被封装在了ProjectAirUtilities文件中的接受广播然后触发监听器的回调函数的操作。
 
 ```c++
 void UProjectAirUtilities::CallLua_PushEvent(AActor* OwnerActor, int32 ID)
@@ -1065,3 +1104,182 @@ void UProjectAirUtilities::CallLua_PushEvent(AActor* OwnerActor, int32 ID)
 在player controller中，如果是客户端的controller的话是要发送心跳的
 
 心跳的作用是什么？确保客户端一直在线?
+
+是的，心跳机制就是确定客户端和服务器之间的连接状态，确保双方通信且正常。
+
+心跳的核心作用：
+
+- 检测连接状态：网络连接可能中断，但是TCP不会立刻感知到
+  - 客户端定时向S端发送心跳包，若服务器一定时间内没有收到心跳，则判断客户端离线
+- 防止链接超时“
+- 负载管理：服务器通过心跳包统计在线玩家数量合理分配资源，若是玩家异常离线，则服务器可以及时释放资源
+
+心跳包通常是轻量级消息，包含：
+
+- **时间戳**：用于计算网络延迟（Ping 值）。
+- **客户端状态**：如角色生命值、位置（可选）。
+- **序列号**：用于检测丢包（如客户端发送`HB-1`, `HB-2`，服务器验证连续性）
+
+
+
+ProjectAirUtilities.cpp
+
+```c++
+// 当期系统的时间戳
+UFUNCTION(BlueprintCallable)
+static int64 Timestamp(); // 单位秒
+
+UFUNCTION(BlueprintCallable)
+static int64 MilliTimestamp(); // 单位毫秒
+```
+
+1. 中的Timestamp，MilliTimestamp 用于时间戳的生成，仅精度不同（秒 vs 毫秒），<u>时间戳是干啥的？</u>
+
+### 时间戳核心用途：
+
+本地时间戳生成：客户端声称本地时间戳，作为客户端自身时间基准
+
+服务器时间同步：让客户端准确感知服务器的时间，减少网络延时带来的差异
+
+如何通过时间同步处理延迟
+
+
+
+
+
+2. ServerAsyncTimestamp，时间同步是干啥的？- 适用于需要时间一致性的场景
+
+​		处理时间戳生成的时候用到了很多静态变量
+
+- 静态变量属于类本身，而不是类的某个实例。因此，**所有对象共享同一个变量副本**
+
+​	ServerAsyncTimestamp函数计算完之后对这些静态变量进行赋值。
+
+
+
+3. ToClientTimestamp  ToClientMilliTimestamp函数是将服务器戳转换为客户端本地时间戳
+
+​		其中的逻辑：
+
+-  计算服务器当前时间  ：DSTimestamp =上次校准的服务器时间+从上次同步到现在的毫秒数（通过CPU周期差计算）
+- 计算时间偏移： offset偏移量 = 客户端本地毫秒时间戳-服务器档当前时间
+- 返回：服务器时间戳加上偏移量，也就是此时的客户端对应的本地时间戳
+
+
+
+
+
+
+
+整个流程处理网络同步：
+
+```
+1. 客户端生成本地时间戳 
+	- 客户端每秒校准
+2. 服务器时间同步流程
+	1，客户端发送同步请求，（发送心跳包，包含本地时间戳）
+	2， 服务器接收请求并响应 （记录客户端时间戳，并返回
+	3，客户端接受响应并计算RTT
+	4,客户端调用ServerAsyncTimestamp同步时间
+```
+
+AProjectAirPlayerController中
+
+```c++
+// 心跳请求
+UFUNCTION(Server, Unreliable)
+void Server_SendHeartbeat(const FSendHeartbeat& send);
+
+// 服务器回复
+UFUNCTION(Client, Unreliable)
+void Client_ReceiveHeartbeat(const FReceiveHeartbeat& beat);
+```
+
+典型的RPC函数，RPC需要在宏中标记Server和Client, 标记的哪里的就在哪个端上执行。
+
+#### RPC方面需要注意的是：
+
+- 只有Actor或其派生类中的函数才能标记为Rpc
+- 在.cpp文件中实现_implementation版本的函数
+
+调用的时候直接调就行，假如客户端调服务器的：
+
+```C++
+// 客户端代码
+void AMyCharacter::LocalFire() {
+    // 客户端本地播放开枪动画
+    PlayFireAnimation();
+    
+    // 调用服务器RPC（实际不会在客户端执行）
+    Server_Fire();
+}
+
+// 服务器实现
+UFUNCTION(Server, Reliable, WithValidation)
+void AMyCharacter::Server_Fire();
+
+void AMyCharacter::Server_Fire_Implementation() {
+    // 服务器执行实际的伤害计算
+    ApplyDamageToTarget();
+}
+```
+
+#### 服务器调用客户端RPC也是同理：
+
+- 服务器会将函数调用和参数发送给指定的客户端
+- 客户端收到消息后，在自己的环境中执行对应的函数。
+
+#### 还有些限制：
+
+- 可靠性的考虑，在宏中确保业务中某些需要可靠传输的用reliable，类似TCP ，不可靠的就是unreliable类似UDP【低延迟，适合高频更新（如位置同步、心跳）】
+
+> 还有就是，不同地方的RPC函数只能访问自己端的数据。
+
+#### `UServerNetworkSubsystem`
+
+链接网络的时候，该Player Controller上使用的连接方式是自己创建的子系统`UServerNetworkSubsystem`
+
+```C++
+void AProjectAirPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+	PlayerCameraManager->SetViewTarget(GetCharacter());
+	if ( GetNetMode() == NM_Client && !IsOfflineDebugMode())
+	{
+        //就是这里了，获取网络子系统
+		auto pNet= UServerNetworkSubsystem::GetServerNetwork(this);
+		if (IsValid(pNet))
+		{   
+			protocol::ClientGameRoleInfoReq msg;
+            //连接上之后， “客户端向服务器发送的获取游戏角色信息的请求消息标识”，用于触发服务器返回对应角色的数据。
+			pNet->SendMsg(protocol::MsgID_ClientGameRoleInfoReq,msg);
+		}
+	}
+}
+
+```
+
+
+
+
+
+### 逻辑运算符 or : 
+
+or是短路运算符，在使用时候与其他语言有写不同：
+
+```lua
+function g_Camera:AddConfig(Type,Config)
+    Config = Config or {}
+    setmetatable(Config,l_BaseConfig)
+    l_BaseConfig.__index = l_BaseConfig
+    self.Configs[Type] = Config  
+end 
+```
+
+如果第一个参数不是nil就返回第一个参数，如果第一个参数为假就返回一个空表。
+
+在lua中假值只有两个 false和nil 其他值都被视为真 （0， " ", {} ）
+
+为什么要这样写？
+
+- 这种写法主要是为了**避免后续代码因 `Config` 为 `nil` 而报错**。
