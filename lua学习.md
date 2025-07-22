@@ -1390,4 +1390,190 @@ end
 
 是直接调： accountData:JoinArea(areaID)
 
-但是
+> emm,,没连接上DS,所以报错显示ds not exist
+
+lua语法中的模拟三元运算符：
+
+```lua
+Num = Num and Num or 1
+-- Num是不是真[除了false和nil之外都是]. 是的话就赋值为Num,不是的话就是赋值为1
+bForceBind = bForceBind == 1 and 1 or -1 
+-- 都是三元运算符的用法。这个是首先判断bForceBind是不是等于1，等于1的话就还是将1赋值给bForceBind，如果不是的话就将-1赋值给bForceBind
+
+```
+
+还有Lua的表是一个强大的数据结构，可以当作数组、字典使用。如果需要的话，可以使用`.`或`[]`添加属性赋值即可
+
+```lua
+local DebugMD={}
+DebugMD.int1 =Tid --使用点添加属性
+DebugMD["hero"] = {g_ItemFlag.Debug} --使用方括号添加属性
+```
+
+### Lua  intelligence文件的解释：
+
+示例：
+
+UE（Unreal Engine）蓝图对应的 Lua 类 `WBP_DebugItem_C`的intelligence 这是智能提示自动生成的文件
+
+```lua
+---@class WBP_DebugItem_C : WBP_Base_C
+---@field public Bg UImage
+---@field public Bg_1 UImage
+---@field public Bg_2 UImage
+---@field public Btn_AddAll UButton
+---@field public Btn_Close UButton
+---@field public Btn_Confirm UButton
+---@field public ETxt_Bind UMultiLineEditableText
+---@field public ETxt_Num UMultiLineEditableText
+---@field public ETxt_Tid UEditableText
+---@field public ListView_BagTab UTileView
+---@field public ListView_BagTile UTileView
+local WBP_DebugItem_C = {}
+
+---return a Lua file path which is relative to project's 'Content/Script', for example 'Weapon.BP_DefaultProjectile_C'
+---@return string
+function WBP_DebugItem_C:GetModuleName() end
+```
+
+`--- @class WBP_DebugItem_C : WBP_Base_C` 
+
+` --- @class `是Lua文档的注释标签，用于定义一个类 后面分别是当前的类名和父类的类名
+
+`--- @field`即使用于声明类的属性  后面的public 就是代表属性是公开的。  接着就是属性名 属性类型
+
+`local WBP_DebugItem_C = {}`这个就是创建一个空表，在lua中可以当类使用
+
+再次声明，这里并没有使用：
+
+```lua
+---@type WBP_DebugItem_C
+local M = UnLua.Class()
+```
+
+因为以上文件仅仅是为了智能提示。
+
+如果想要Lua中访问相关蓝图的属性，才应该使用`Unlua.Class()`
+
+
+
+
+
+### Lua实例的生命周期：
+
+ 基本和蓝图对象的生命周期相同。
+
+创建阶段在关联的蓝图对象在UE中共被创建的时候，对应的Lua实例对象也会被创建。
+
+生命周期函数相关的执行顺序：
+
+1. Initialize：对象创建时最早调用的初始化函数，此时对象刚被实例化，部分属性可能还未完全设置好，一般用于做一些基础的初始化操作。 
+2. PreConstruct：在可视化构建对象之前调用，可用于修改对象的属性，这些修改会影响后续的构建过程。 
+3. Construct：对象完成构建后调用，这时对象的所有属性都已设置好，可进行 UI 绑定、事件注册等操作。 
+4. EventBeginPlay：在游戏开始运行，对象进入游戏世界时调用，此时游戏世界的状态已准备好，可执行与游戏逻辑相关的初始化操作。
+
++
+
+
+
+
+
+
+
+
+
+Interaction 相关的靠近出现交互按钮的相关的UI界面是：WBP_Interact_C
+
+ 其主要是通过管理器管理的，可能是因为交换物太多了？InteractManager
+
+通过使用InteractManager的函数`InteractManager:GetSelectedComponent()`获取之后，如果有对应的可交互组件，就从对应的组件中获取不同的交互信息填充进UI的list中
+
+然后 self.ListView_InteractList:BP_SetListItems(EntryDataArray)
+
+InteractManager什么时候启动的呢？InteractManager怎么获取到交互物的呢？ InteractManager挂在哪里呢？
+
+
+
+InteractManager是一个子系统，在GameInstance.lua中被引入。而还有与i和组件也引用了很多交互的函数
+
+## GaneInstance中：
+
+```lua
+-- Manager
+g_InteractManager = require("Manager.InteractManager")
+```
+
+ 我一直疑惑manager的周期，字啊这里也就解决了我的疑惑。而且同之前一样的，之前来看过一次lua通过设置一个路径list然后for循环每一个元素进行require实现。只是后续的manager和他们分开了。
+
+> interactManger在gameinstance的时候就有一个实例启动1了
+
+为什么这么说，首先我们看看require的作用：
+
+1. 当执行`g_InteractManager = require("Manager.InteractManager")`的时候，Lua会寻找对应的文件
+
+2. 然后就执行了全局函数
+
+   - ```lua
+     -- 模块局部表
+     local M = {}
+     
+     -- 模块属性
+     M.Widget = nil
+     M.World = nil
+     
+     -- 模块函数
+     function M.init()
+         print("InteractManager initialized")
+     end
+     
+     -- 返回模块表
+     return M
+     
+     --InteractManager.lua 文件末尾通过 return M 返回模块表，require 会把这个返回值缓存起来，同时赋值给 g_InteractManager
+     ```
+
+3. 注意最后返回的是什么，返回的是M，所以在Gameinstance.lua的时候获得的结果是什么？g_InteractManager =M.**此时也就说明了这个全局变量的成立**
+
+至此全局manager生命周期的问题解决了。
+
+接下来解决那些可交互的物品是怎么跟玩家进行交互显示UI的：
+
+*---@type ObjectInteractiveComponent_C* 场景中物品都挂载了这个组件，很大可能就是这个组件在场景中调用manager相关函数进行处理。
+
+
+
+InteractManager也被制作为了lua中的**全局参数**，有**很多函数供全局使用**，如ActiveViewMask ，其实启动的就是interactManager的widget的启用
+
+```lua
+-- interactManager.lua:
+function M:ActiveViewMask(bActive)
+    if self.Widget and self.Widget.ActiveMask then
+        self.Widget:ActiveMask(bActive)
+    end
+end
+```
+
+而且他的widget不是manager本身带的，而是在showView的时候通过UISubsystem获取的
+
+```Lua
+function M:ShowView(World)
+    self.World = World
+    self.InteractDataManager = UE.UInteractManager.GetInstance(World)
+    -- 获取widget是通过路径加载，然后再通过UISystem进行创建的
+    local InteractWidget = UE.UClass.Load(g_FindUMGData("WBP_Interact","SoftPath"))
+    --Widget是通过UiSystem创建的↓
+    self.Widget = UE.UUISubsystem.Get(World):CreateViewWidget(World,InteractWidget)
+    if self.Widget and self.Widget.InitView then
+        self.Widget:InitView()
+    end
+    g_MsgEvent:AddEventListener(self,nil,g_EventID.Event_InteractionDead, self.OnInteractionDead)
+end
+```
+
+
+
+
+
+疑问：  zhandou场景中的交互物为什么需要依附在AActorPlacementTool下面然后再添加子Actor呢？
+
+子Actor就是添加到场景中的交互物，交互物交互是使用Component，component是ObjectInteractiveComponent
