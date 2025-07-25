@@ -1725,7 +1725,7 @@ WBP_BAse.lua初始化的时候创建了一个CDHandles ,在创建之后后续如
 
 function M:ActivateCD(Ability,TagName)：  在WBP_Main中OnActiveAbility的时候会激活这个函数，也就是点击攻击或者技能键时触发技能的时候能够直接开启CD并添加进CDHandles.  CDImage就是放入数组的image对象
 
-M:CheckCDHandles()： 这个函数被每帧调用进行检查，然后检查又没有冷却的CD的image有的话循环处理，没有的话直接退出。其检查是否结束的时候是通过check方法进行处理的
+M:CheckCDHandles()： 这个函数被每帧调用进行检查，然后检查又没有冷却的CD的image有的话循环处理，没有的话直接退出。其检查是否结束的时候是通过check方法进行处理的，check就是监测是否冷却结束，结束的时候没结束返回true，结束了就返回false.
 
 - 但是我没有找到check方法在哪里定义的，但是根据ai的引导，Handle的元表是通过 setmetatable(Handle,g_DefaultCDHandle)进行处理的，所以我应该能关注这个g_DefaultCDHandle。
 
@@ -1781,11 +1781,11 @@ g_DefaultCDHandle =
 g_DefaultCDHandle.__index = g_DefaultCDHandle
 ```
 
-![M_CD_inst](./Snipaste/image-20250725145803127.png)
+![M_CD_inst](Snipaste/image-20250725145803127.png)
 
 我以为黑猴的CD也是转圈圈的结果他的遮罩是从下向上的：
 
-![image-20250725145631489](.\Snipaste\image-20250725145631489.png)
+![image-20250725145631489](Snipaste\image-20250725145631489.png)
 
 还有了解的误区，之前以为是 self:BindCDImages(self.QuickMove_CD,"Ability.Character.Dash")绑定的那个闪避的图标，原绑定的就是M_CD_inst这个材质实例。然后g_DefaultCDHandle中check的对材质的处理信息就能够正确理解了，就是设置其剩余时间和Step参数绑定。
 
