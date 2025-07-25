@@ -370,30 +370,31 @@ Lua 的`pairs`遍历顺序是由表的内部结构决定的：先遍历连续整
 
 ### 元表：
 
-特殊的表，作用：改变其他表的默认行为，比如增加规则，比较规则，索引查找规则等。
+特殊的**表**
 
-实现面向对象的特性。继承、多态 以及自定义操作语法（运算符重载？）
+作用：
 
-元表本质也是普通表
+- 改变其他表的默认行为，比如增加规则，比较规则，索引查找规则等。
+- 实现面向对象的特性。继承、多态 以及自定义操作语法（运算符重载？）
+- 元表本质也是普通表
 
-```lua
-local myTable={"hero",1,2,3}
-local meta={
-    __tostring =function(t) --自定义打印行为
-        local str="table content:"
-        for _,v in ipairs(t) do
-            str=str..tostring(v).." "
-            end
-        return str
-        end
-}
-```
+使用setmetatable之后，返回的表就是元表，之前的myTable是被元表影响行为的目标表
 
-使用setmetatable之后，返回的表就是元表，之前的myTable是被元表影响行为的”目标表“
+--2025年7月25日 ----------------------------
+
+[来这里看更新的东西吧，还有实际项目的示例](#我不理解的是怎么使用这个表的)
+
+setmetatable作用就是为一个表设置元表 
+
+setmetatable(table, metatable) table: 要设置元表的目标表。 
+
+
+
+
 
 ### 那元表在虚幻中有什么应用场景呢
 
-在ue绑定蓝图之后申城的模板文件中 使用unlua.Class()创建类时，unlua会自动生成元表，用于模拟UE蓝图类的继承，事件重写
+在ue绑定蓝图之后生成的模板文件中 使用unlua.Class()创建类时，unlua会自动生成元表，用于模拟UE蓝图类的继承，事件重写
 
 ![元表与引擎关联](C:\Users\yinming.li\Desktop\MD\Snipaste\元表与引擎关联.png)
 
@@ -418,12 +419,12 @@ local function Unlua_Class(baseClass){
         return ClassTable
     }
     
-    local M= Unlua_Class(UE4.AActor)
+    local M= Unlua_Class(UE.AActor)
     function M:ReceiveBeginPlay()
-        UE4.Log("actor开始播放了")
+        UE.Log("actor开始播放了")
         end
     
-    这代码能对吗？UE4.Log()有这个函数和对象吗？
+    --这代码能对吗？UE.Log()有这个函数和对象吗？
 ```
 
 #### **疑问：下划线这又是什么东西？**
@@ -1496,7 +1497,7 @@ InteractManager什么时候启动的呢？InteractManager怎么获取到交互�
 
 InteractManager是一个子系统，在GameInstance.lua中被引入。而还有与i和组件也引用了很多交互的函数
 
-## GaneInstance中：
+## GaneInstance中： 
 
 ```lua
 -- Manager
@@ -1516,27 +1517,26 @@ g_InteractManager = require("Manager.InteractManager")
    - ```lua
      -- 模块局部表
      local M = {}
-     
      -- 模块属性
      M.Widget = nil
      M.World = nil
-     
      -- 模块函数
      function M.init()
          print("InteractManager initialized")
      end
-     
      -- 返回模块表
      return M
      
      --InteractManager.lua 文件末尾通过 return M 返回模块表，require 会把这个返回值缓存起来，同时赋值给 g_InteractManager
      ```
-
+   
 3. 注意最后返回的是什么，返回的是M，所以在Gameinstance.lua的时候获得的结果是什么？g_InteractManager =M.**此时也就说明了这个全局变量的成立**
 
 至此全局manager生命周期的问题解决了。
 
 接下来解决那些可交互的物品是怎么跟玩家进行交互显示UI的：
+
+## ObjectInteractiveComponent：
 
 *---@type ObjectInteractiveComponent_C* 场景中物品都挂载了这个组件，很大可能就是这个组件在场景中调用manager相关函数进行处理。
 
@@ -1572,8 +1572,229 @@ end
 
 
 
-
-
 疑问：  zhandou场景中的交互物为什么需要依附在AActorPlacementTool下面然后再添加子Actor呢？
 
 子Actor就是添加到场景中的交互物，交互物交互是使用Component，component是ObjectInteractiveComponent
+
+
+
+交互的时候应该还有一个系统没有关注到呢：
+
+## EffectTriggerSystem.lua
+
+该子系统也是在GameInstance的时候就启用的，其中
+
+g_TriggerEffect 就是资源生成的时候调用的。也就是在不同资源生成的时候能够根据对应的类型展示对应的交互逻辑~~，这些都是在Server上执行的。~~  -- 并不只是在server，还有在玩家将物品放入世界之后该物品的交互性质也会调用g_TriggerEffect 
+
+其中有
+
+```lua
+NeedWaitForOperationMap[g_EffectType.Build] = true
+NeedWaitForOperationMap[g_EffectType.Collect] = true
+NeedWaitForOperationMap[g_EffectType.LuaScript] = true
+NeedWaitForOperationMap[g_EffectType.HelmControl] = true
+NeedWaitForOperationMap[g_EffectType.BatteryControl] = true
+```
+
+这些子在后面都有匿名函数的格式进行处理
+
+```lua
+--region 注册交互逻辑 客户端
+EffectClientMap[g_EffectType.Collect] = function(Trigger, Target, Params, bInteractSys)
+    local CollectionWidget = UE.UClass.Load(g_FindUMGData("WBP_Collection", "SoftPath"))
+    local Widget = UE.UUISubsystem.Get(Trigger):CreateViewWidget(Trigger, CollectionWidget)
+    if Widget and Widget.Init then
+        Widget:Init(Trigger.ObjectInteractiveComponent, bInteractSys)
+    end
+    if Widget and Widget.CloseCharacterInput then
+        Widget:CloseCharacterInput(true)
+    end
+end
+```
+
+其中是不同交互类型的各种匿名函数的注册
+
+交互系统有一下这些：
+
+```lua
+g_EffectType =
+{
+    Collect = 1,            -- 采集                          -- params：无
+    Build = 2,              -- 打造                          -- params：无
+    Trans = 3,              -- 切换场景                       -- params：Strs[1] level名
+   --等等，后面的就不列举了
+}
+    
+```
+
+所以这个交互系统是根据不同的交互类型进行了处理。
+
+## 背包相关
+
+​	好奇背包是是怎么实现展示的，找到对应的背包UI能够发现确实是有对应的WBP_Bag界面，其中的背包展示相关的是BagTileView瓦片视图，好多行列有一个个物品是由WBP_BagItemEntry组成的。 寻找他们对应的lua文件
+
+在WBP_Bag.lua文件中，你可以看到其在construct的时候是通过获取玩家身上的组件对背包UI中的item进行初始化的.
+
+从组件中获取所有item信息之后展示到前端UI上可以看到是通过` self.BagTileView:AddItem(ItemObject)` 
+
+> 这里在对应的名为BagTileView的瓦片视图中并未找到对应的函数AddItem，声明一下，对应的类中找不到的时候最好看一看是不是继承了谁或者include了什么方法。朝这个方向找相关函数或者属性很好处理。
+
+
+
+
+
+>    插一句：很多Manager都是在C++中写的【我说怎么在lua中找manager和subsystem找不到】，并且manager很多都是继承自subsystem的，所以就是项目已启动各种manager就同时启动。
+
+cfg一般指的是配置
+
+
+
+## 工程思维：
+
+统一的交互和UI的显示都是由各自的子系统或者管理器进行处理，这样所有的交互逻辑由EffectTriggerSystem处理，所有的UI显示由UISystem进行处理，这样维护的时候就不用在全图代码的各个位置进行查找和维护，方便统一管理。
+
+GameInstance subsystem  : 此类子系统继承自gameinstance所以使用的时候直接调用就行，无需额外手动注册实例，在使用的时候直接通过Game instance调用。
+
+创建子系统类：
+
+```C++
+UCLASS()
+class UMyGameInstanceSubsystem :public UGameInstanceSubsystem
+{
+GENERATED_BODY()
+public:
+    //子系统初始化的时候调用
+	virtual void Initialize (FSubsystemCollectionBase& Collection) override;
+	//子系统销毁的时候调用
+	virtual void Deinitialize()override;
+}
+```
+
+在使用子系统的时候：
+
+```C++
+UMyGameInstanceSubsystem *Mysubsystem = GetGameInstance()->GetSubsystem<UMyGameInstanceSubsystem>()
+```
+
+
+
+
+
+根据玩家和世界中场景的距离加载Actor的函数写在哪里呢？
+
+首先找到根据路径生成物品的函数，在ProjectAirSpawnTool类中找到函数SpawnActorByPath ：
+
+```C++
+UFUNCTION(BlueprintCallable, Category = "Spawn Tool")
+static AActor* SpawnActorByPath(const UObject* WorldContextObject, const  FString& AssetPath, FVector SpawnLocation, FRotator SpawnRotation = FRotator::ZeroRotator,bool bAddResourceMgr = false, AActor* Owner = nullptr,const FSpawnToolParams& ToolParams = FSpawnToolParams(), APawn* Instigator = nullptr, ESpawnActorCollisionHandlingMethod CollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::Undefined);
+
+UFUNCTION(BlueprintCallable, Category = "Spawn Tool")
+static AActor* SpawnActorByPath_Transform(const UObject* WorldContextObject, const FString& AssetPath, FTransform SpawnTransform, bool bAddResourceMgr = false,AActor* Owner = nullptr,const FSpawnToolParams& ToolParams = FSpawnToolParams(), APawn* Instigator = nullptr, ESpawnActorCollisionHandlingMethod CollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::Undefined);
+
+```
+
+然后全局寻找哪里调用这个根据路径生成Actor的函数，所以找到对应的管理器： settleGameplayManager.
+
+结果发现其中并没有相关的逻辑，然后继续找引用SpawnActorByPath 的文件，找到ResourceGenerateFreshMgr这个应该就是根据距离刷新Actor的类
+
+```C++
+UResourceGenerateFresh* UResourceGenerateFreshMgr::CraeteGenerateFresh(const UObject* WorldContextObject,int nTid, int nPoolTid,const FVector& PlayerPos, const FRotator& PlayerRotator)
+```
+
+
+
+## ResourceGenerateFreshMgr 
+
+这个类主要就是控制资源生成与刷新之类的管理器，其中主要的是CraeteGenerateFresh 
+
+
+
+内存，还是喜欢更底层的内存管理方面的东西
+
+lua中内存方面的东西怎么说呢？垃圾回收‘
+
+### lua中对属性（本质是表)的使用
+
+WBP_BAse.lua初始化的时候创建了一个CDHandles ,在创建之后后续如何使用呢？
+
+要注意的是在lua中创建一个变量的时候还是不能忘记其是一个表，所以在使用的时候，可以用其管理相关
+
+#### 我不理解的是怎么使用这个表的 
+
+只看到了他在某些函数中被调用，然后被塞入了一些奇怪的东西，其实是将键值对添加进CDHandles，以图像作为键，以句柄作为值放入CDHandles'中，那么此时 CDHandles可以当做一个管理器使用。
+
+function M:ActivateCD(Ability,TagName)：  在WBP_Main中OnActiveAbility的时候会激活这个函数，也就是点击攻击或者技能键时触发技能的时候能够直接开启CD并添加进CDHandles.  CDImage就是放入数组的image对象
+
+M:CheckCDHandles()： 这个函数被每帧调用进行检查，然后检查又没有冷却的CD的image有的话循环处理，没有的话直接退出。其检查是否结束的时候是通过check方法进行处理的
+
+- 但是我没有找到check方法在哪里定义的，但是根据ai的引导，Handle的元表是通过 setmetatable(Handle,g_DefaultCDHandle)进行处理的，所以我应该能关注这个g_DefaultCDHandle。
+
+- 进入g_DefaultCDHandle确实能够找到对应的check函数
+
+- ```lua
+  function M:ActivateCD(Ability,TagName)
+      if not Ability then
+          return
+      end
+      local Handle = {} 
+      setmetatable(Handle,g_DefaultCDHandle) --设置元表的时候使用的是全局方法，这里要注意g_DefaultCDHandle中的__index设置的是自身，所以当Handle找不到某些字段的时候会在g_DefaultCDHandle表中去寻找。
+      -- 把 g_DefaultCDHandle 设为 Handle 表的元表。
+      local CDImage = self.CDImages[TagName] 
+      if not CDImage then
+          return
+      end
+       -- 这里对Handle属性的处理也不是对handle创建属性进行赋值，而是对元表中的属性进行赋值。这样在后期使用check函数的时候每个对象使用自己的CDImage,MatInstance Ability就能够监测了👇
+      Handle.CDImage = CDImage                                              
+      Handle.MatInstance = CDImage:GetDynamicMaterial()                                    
+      Handle.Ability = Ability
+      self.CDHandles[CDImage] = Handle
+  end 
+  ```
+
+元表g_DefaultCDHandle的源码：
+
+```lua
+g_DefaultCDHandle = 
+{
+    CDImage = nil,
+    MatInstance = nil,
+    Ability = nil,
+    Check = function(self)
+        if not self.Ability then
+            return false
+        end
+        local TimeRemaining,CoolDuration = 0,0
+        TimeRemaining,CoolDuration = self.Ability:K2_GetCooldownTimeRemainingAndDuration(TimeRemaining,CoolDuration)
+        if TimeRemaining > 0 then
+            if self.MatInstance then
+                self.MatInstance:SetScalarParameterValue("Step",TimeRemaining / CoolDuration)
+                --这个材质，找半天，原来按键上的那个dash只是纹理,转圈的冷却材质使用的是M_CD，step是材质遮罩参数。
+            end
+            self.CDImage:SetVisibility(UE.ESlateVisibility.SelfHitTestInvisible)
+            return true 
+        else 
+            self.CDImage:SetVisibility(UE.ESlateVisibility.Hidden)
+            return false 
+        end 
+    end,
+}
+g_DefaultCDHandle.__index = g_DefaultCDHandle
+```
+
+![M_CD_inst](./Snipaste/image-20250725145803127.png)
+
+我以为黑猴的CD也是转圈圈的结果他的遮罩是从下向上的：
+
+![image-20250725145631489](.\Snipaste\image-20250725145631489.png)
+
+还有了解的误区，之前以为是 self:BindCDImages(self.QuickMove_CD,"Ability.Character.Dash")绑定的那个闪避的图标，原绑定的就是M_CD_inst这个材质实例。然后g_DefaultCDHandle中check的对材质的处理信息就能够正确理解了，就是设置其剩余时间和Step参数绑定。
+
+```lua
+ if self.MatInstance then
+            self.MatInstance:SetScalarParameterValue("Step",TimeRemaining / CoolDuration)
+            --这个材质，找半天，原来按键上的那个dash只是纹理,转圈的冷却材质使用的是M_CD，step是材质遮罩参数。
+        end
+```
+
+![闪避上面的材质](Snipaste/闪避上面的材质.png)
+
