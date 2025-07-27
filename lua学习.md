@@ -1723,9 +1723,13 @@ WBP_BAse.lua初始化的时候创建了一个CDHandles ,在创建之后后续如
 
 只看到了他在某些函数中被调用，然后被塞入了一些奇怪的东西，其实是将键值对添加进CDHandles，以图像作为键，以句柄作为值放入CDHandles'中，那么此时 CDHandles可以当做一个管理器使用。
 
-function M:ActivateCD(Ability,TagName)：  在WBP_Main中OnActiveAbility的时候会激活这个函数，也就是点击攻击或者技能键时触发技能的时候能够直接开启CD并添加进CDHandles.  CDImage就是放入数组的image对象
+##### M:ActivateCD(Ability,TagName)：
 
-M:CheckCDHandles()： 这个函数被每帧调用进行检查，然后检查又没有冷却的CD的image有的话循环处理，没有的话直接退出。其检查是否结束的时候是通过check方法进行处理的，check就是监测是否冷却结束，结束的时候没结束返回true，结束了就返回false.
+  在WBP_Main中OnActiveAbility的时候会激活这个函数，也就是点击攻击或者技能键时触发技能的时候能够直接开启CD并添加进CDHandles.  CDImage就是放入数组的image对象
+
+##### M:CheckCDHandles()： 
+
+这个函数被每帧调用进行检查，然后检查又没有冷却的CD的image有的话循环处理，没有的话直接退出。其检查是否结束的时候是通过check方法进行处理的，check就是监测是否冷却结束，结束的时候没结束返回true，结束了就返回false.
 
 - 但是我没有找到check方法在哪里定义的，但是根据ai的引导，Handle的元表是通过 setmetatable(Handle,g_DefaultCDHandle)进行处理的，所以我应该能关注这个g_DefaultCDHandle。
 
@@ -1751,7 +1755,7 @@ M:CheckCDHandles()： 这个函数被每帧调用进行检查，然后检查又�
   end 
   ```
 
-元表g_DefaultCDHandle的源码：
+##### 元表g_DefaultCDHandle的源码：
 
 ```lua
 g_DefaultCDHandle = 
@@ -1798,3 +1802,8 @@ g_DefaultCDHandle.__index = g_DefaultCDHandle
 
 ![闪避上面的材质](Snipaste/闪避上面的材质.png)
 
+
+
+### UI显示层级怎么处理的？
+
+UI的显示层级一般是怎么处理的呢？想到了之前处理编辑器相关的属性通过meta进行条件显示。Ui的层级处理呢？先看看Uisystem
