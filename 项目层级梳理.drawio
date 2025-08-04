@@ -1,0 +1,28 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.0.6 Chrome/138.0.7204.100 Electron/37.2.3 Safari/537.36" version="28.0.6">
+  <diagram name="第 1 页" id="uPD0GtoIWYUvpTkSphaO">
+    <mxGraphModel dx="1892" dy="593" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" background="none" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="VFrmsLGKg1mPVkvRmTc--5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#182E3E;fontColor=default;labelBackgroundColor=none;" edge="1" parent="1" source="VFrmsLGKg1mPVkvRmTc--1" target="VFrmsLGKg1mPVkvRmTc--4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VFrmsLGKg1mPVkvRmTc--1" value="GASManagerComponent" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#EEEEEE;fontColor=#FFFFFF;fillColor=#56517E;labelBackgroundColor=none;" vertex="1" parent="1">
+          <mxGeometry x="20" y="200" width="176" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="VFrmsLGKg1mPVkvRmTc--7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#182E3E;fontColor=default;labelBackgroundColor=none;" edge="1" parent="1" source="VFrmsLGKg1mPVkvRmTc--2" target="VFrmsLGKg1mPVkvRmTc--6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="VFrmsLGKg1mPVkvRmTc--2" value="MyAbilitySystemComponent" style="whiteSpace=wrap;html=1;fillColor=#56517E;strokeColor=#EEEEEE;fontColor=#FFFFFF;rounded=1;labelBackgroundColor=none;" vertex="1" parent="1">
+          <mxGeometry x="590" y="200" width="258" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="VFrmsLGKg1mPVkvRmTc--4" value="&lt;div style=&quot;line-height: 180%;&quot;&gt;这应该是管理GAS的，但是为什么GAS需要管理器处理呢&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(57, 60, 86), rgb(182, 184, 207));&quot;&gt;？&lt;/span&gt;&lt;div&gt;其中放置的是preloadedAbilities和ActivatedAbilities两个数组&lt;/div&gt;&lt;div&gt;以及一个ASC&lt;/div&gt;&lt;div&gt;初始化函数：&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;super组件的初始化，然后获取owner上的ASC，初始化Asc,&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;接着获取到preloadedAbilities判断是不是HasAuthority&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;接着判断预加载的Abilities存不存在，存在则GiveAbility&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;判断ActivateAbilities个数是不是大于0,是的话使用ASC上的tryActiveAbilitityByClass 激活preloaded的ability&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;/div&gt;&lt;/div&gt;" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#56517E;strokeColor=#EEEEEE;fontColor=#FFFFFF;rounded=1;labelBackgroundColor=none;align=left;size=0.14285714285714285;" vertex="1" parent="1">
+          <mxGeometry x="-77" y="310" width="370" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="VFrmsLGKg1mPVkvRmTc--6" value="这个倒是知道，这个是继承自GAS组件的自定义实现的组件" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#56517E;strokeColor=#EEEEEE;fontColor=#FFFFFF;rounded=1;labelBackgroundColor=none;" vertex="1" parent="1">
+          <mxGeometry x="623.5" y="320" width="191" height="120" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
