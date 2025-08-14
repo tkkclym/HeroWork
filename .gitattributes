@@ -1,0 +1,6 @@
+# 文本文件统一使用LF换行符
+* text=auto eol=lf
+
+# 对于二进制文件（如drawio等）不进行换行符转换
+*.drawio binary
+*.drawio.bkp binary
