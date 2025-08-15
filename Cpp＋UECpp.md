@@ -6,7 +6,7 @@
 
 有的时候在需要极致性能的时候甚至需要手搓汇编。然后和Cpp语言一起交给GCC编译之后生成可执行文件、。
 
-<img src="Snipaste/gcc_Assemble.png" alt="gcc_Assemble" style="zoom:50%;" />
+<img src="Snipaste/gcc_Assemble.png" alt="gcc_Assemble"  />
 
 
 
@@ -119,3 +119,16 @@ SpawnedActor->MyBlueprintFunction(); // 直接调用蓝图实现
 
 以上就是问题的答案以及相关的拓展。
 
+
+
+## 蓝图节点引脚
+
+1. 返回值引脚，输出返回值。仅有一个，如果要输出多个值的话可以将其包装成结构体，然后return 
+2. 输出引用参数。
+   - 概念：通过引用或指针的方式将数据传输出去的参数，蓝图会在节点右侧生成对应的输出引脚
+   - 特点：
+     - 可以有多个。
+     -  参数必须是非`const`的引用蓝图才会把其当做输出引脚，如果是`const`的话会被认为是输入参数（C++关键字`Const`修饰的参数不能在内部改变）
+     - 根据unreal命名规范，需要给输出参数加上前缀`Out`这样便于识别。
+
+<img src="Snipaste/结构体学习.png" alt="结构体学习" style="zoom:75%;" />
